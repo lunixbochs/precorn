@@ -7,7 +7,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 link_directories(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
-add_definitions(-O2 -std=c99 -Wno-deprecated-declarations)
+add_definitions(-ggdb -O2 -std=c99 -Wno-deprecated-declarations)
 
 file(GLOB_RECURSE FUZZ_SOURCES src/*.c)
 add_library(fuzzl SHARED ${FUZZ_SOURCES})

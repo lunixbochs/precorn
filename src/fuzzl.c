@@ -42,16 +42,21 @@ static void proxy_map_all(uc_engine *uc) {
 static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
 }
 
-static void run(uc_engine *uc, uint64_t rip) {
+static ucontext_t ucp_main;
+static uc_engine *uc;
+
+static void run() {
     printf("HOLD MY BEER\n");
+    printf("here %llx\n", ucp_main.uc_mcontext->__ss.__rip);
     fflush(stdout);
+    uint64_t rip = ucp_main.uc_mcontext->__ss.__rip;
+    printf("other rip: %p\n", rip);
     check(uc_emu_start(uc, rip, 0, 0, 0));
     exit(0);
 }
 
 __attribute__((constructor))
 void fuzzl() {
-    uc_engine *uc;
     check(uc_open(UC_ARCH_X86, UC_MODE_32, &uc));
     // map zee memory
     proxy_map_all(uc);
@@ -84,7 +89,17 @@ void fuzzl() {
     // set_reg(RAX, fs);
     // set_reg(RAX, gs);
 
-    makecontext(&ucp, run, 2, uc, &&label);
+    size_t ssize = 1 * 1024 * 1024;
+    uintptr_t stack = (uintptr_t)calloc(1, ssize);
+    printf("%p\n", stack);
+    uintptr_t stack_top = ((stack + ssize) & ~15) - sizeof(void *);
+    ucp.uc_stack.ss_sp = (void *)stack;
+    ucp.uc_stack.ss_size = ssize;
+    ucp.uc_link = NULL;
+
+    ucp.uc_mcontext->__ss.__rip = (uint64_t)run;
+    ucp.uc_mcontext->__ss.__rsp = stack_top;
+    swapcontext(&ucp_main, &ucp);
 
     /*
     register uint64_t rsp __asm__("rsp");
