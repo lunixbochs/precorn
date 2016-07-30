@@ -9,7 +9,7 @@
 
 #include <unicorn/unicorn.h>
 
-#define check(...) do {uc_err err; if ((err = __VA_ARGS__)) { printf("%s failed: %s\n", #__VA_ARGS__, uc_strerror(err)); exit(1); }} while (0);
+#define check(...) do {uc_err err; if ((err = __VA_ARGS__)) { printf("%s failed: %s\n", #__VA_ARGS__, uc_strerror(err)); }} while (0);
 
 static void proxy_map_all(uc_engine *uc) {
     mach_port_t port = mach_task_self();
@@ -19,17 +19,25 @@ static void proxy_map_all(uc_engine *uc) {
     mach_vm_size_t vm_size;
     vm_region_basic_info_data_64_t info;
 
+    typedef struct {
+        uint64_t addr, size;
+        int prot;
+    } save_addr;
+    size_t addr_count = 0;
+
+    save_addr *addrs = malloc(10000 * sizeof(save_addr));
     kern_return_t err;
     while (1) {
         count = VM_REGION_BASIC_INFO_COUNT_64;
         err = mach_vm_region(port, &address, &vm_size, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &count, &object_name);
         if (err != KERN_SUCCESS) {
             printf("mach_vm_region error\n");
-            return;
+            break;
         }
-        // printf("mapping 0x%llx-0x%llx\n", address, vm_size);
-        // TODO: are the prots the same?
-        check(uc_mem_map_ptr(uc, address, vm_size, UC_PROT_ALL, (void *)address));
+        save_addr *tmp = &addrs[addr_count++];
+        tmp->addr = address;
+        tmp->size = vm_size;
+        tmp->prot = info.protection;
 
         prev_address = address;
         address += vm_size;
@@ -38,27 +46,51 @@ static void proxy_map_all(uc_engine *uc) {
             break;
         }
     }
+    for (size_t i = 0; i < addr_count; i++) {
+        save_addr *tmp = &addrs[i];
+        if (tmp->addr == (uint64_t)addrs) continue;
+        // TODO: are the prots the same?
+        check(uc_mem_map_ptr(uc, tmp->addr, tmp->size, UC_PROT_ALL, (void *)address));
+    }
+    free(addrs);
 }
 
-static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+static void hook_code(uc_engine *uc, uint64_t addr, uint32_t size, void *user) {
+    printf("exec @0x%llx\n", addr);
+}
+
+static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user) {
+    printf("invalid mem: 0x%llx\n", addr);
+    return false;
+}
+
+static void hook_syscall(uc_engine *uc, void *user) {
+    uint64_t rax;
+    uc_reg_read(uc, UC_X86_REG_RAX, &rax);
+    printf("syscall: %lld\n", rax);
 }
 
 static ucontext_t ucp_main;
 static uc_engine *uc;
 
 static void run() {
-    printf("HOLD MY BEER\n");
-    printf("here %llx\n", ucp_main.uc_mcontext->__ss.__rip);
-    fflush(stdout);
+    uc_hook hh;
+    uc_hook_add(uc, &hh, UC_HOOK_CODE, hook_code, NULL, 1, 0);
+    uc_hook_add(uc, &hh, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | UC_HOOK_MEM_FETCH_UNMAPPED, hook_mem_invalid, NULL, 1, 0);
+    // uc_hook_add(uc, &hh, UC_HOOK_INTR, hook_intr, NULL, 1, 0);
+    uc_hook_add(uc, &hh, UC_HOOK_INSN, hook_syscall, NULL, 1, 0, UC_X86_INS_SYSCALL);
+
     uint64_t rip = ucp_main.uc_mcontext->__ss.__rip;
-    printf("other rip: %p\n", rip);
+    printf("emulating at: 0x%llx\n", rip);
     check(uc_emu_start(uc, rip, 0, 0, 0));
+
+    uc_reg_read(uc, UC_X86_REG_RAX, &rip);
     exit(0);
 }
 
 __attribute__((constructor))
 void fuzzl() {
-    check(uc_open(UC_ARCH_X86, UC_MODE_32, &uc));
+    check(uc_open(UC_ARCH_X86, UC_MODE_64, &uc));
     // map zee memory
     proxy_map_all(uc);
 
@@ -92,7 +124,7 @@ void fuzzl() {
 
     size_t ssize = 1 * 1024 * 1024;
     uintptr_t stack = (uintptr_t)calloc(1, ssize);
-    printf("%p\n", stack);
+    printf("0x%lx\n", stack);
     uintptr_t stack_top = ((stack + ssize) & ~15) - sizeof(void *);
     ucp.uc_stack.ss_sp = (void *)stack;
     ucp.uc_stack.ss_size = ssize;
