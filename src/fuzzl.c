@@ -62,21 +62,21 @@ void fuzzl() {
     // TODO: gotta pivot stack still
 #define set_reg(_enum, attr) check(uc_reg_write(uc, UC_X86_REG_##_enum, &ucp.uc_mcontext->__ss.__##attr));
     set_reg(RAX, rax);
-    set_reg(RAX, rbx);
-    set_reg(RAX, rcx);
-    set_reg(RAX, rdx);
-    set_reg(RAX, rdi);
-    set_reg(RAX, rsi);
-    set_reg(RAX, rbp);
-    set_reg(RAX, rsp);
-    set_reg(RAX, r8);
-    set_reg(RAX, r9);
-    set_reg(RAX, r10);
-    set_reg(RAX, r11);
-    set_reg(RAX, r12);
-    set_reg(RAX, r13);
-    set_reg(RAX, r14);
-    set_reg(RAX, r15);
+    set_reg(RBX, rbx);
+    set_reg(RCX, rcx);
+    set_reg(RDX, rdx);
+    set_reg(RDI, rdi);
+    set_reg(RSI, rsi);
+    set_reg(RBP, rbp);
+    set_reg(RSP, rsp);
+    set_reg(R8, r8);
+    set_reg(R9, r9);
+    set_reg(R10, r10);
+    set_reg(R11, r11);
+    set_reg(R12, r12);
+    set_reg(R13, r13);
+    set_reg(R14, r14);
+    set_reg(R15, r15);
 #undef set_reg
 
     // TODO: do wrmsr in the emulator for GS
