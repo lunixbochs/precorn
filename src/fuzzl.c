@@ -21,6 +21,7 @@ static void proxy_map_all(uc_engine *uc) {
 
     kern_return_t err;
     while (1) {
+        count = VM_REGION_BASIC_INFO_COUNT_64;
         err = mach_vm_region(port, &address, &vm_size, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &count, &object_name);
         if (err != KERN_SUCCESS) {
             printf("mach_vm_region error\n");
