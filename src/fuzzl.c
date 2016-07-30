@@ -72,6 +72,7 @@ static void hook_syscall(uc_engine *uc, void *user) {
 
 static ucontext_t ucp_main;
 static uc_engine *uc;
+static uint64_t set_rip;
 
 static void run() {
     uc_hook hh;
@@ -80,8 +81,19 @@ static void run() {
     // uc_hook_add(uc, &hh, UC_HOOK_INTR, hook_intr, NULL, 1, 0);
     uc_hook_add(uc, &hh, UC_HOOK_INSN, hook_syscall, NULL, 1, 0, UC_X86_INS_SYSCALL);
 
-    uint64_t rip = ucp_main.uc_mcontext->__ss.__rip;
+    // uint64_t rip = ucp_main.uc_mcontext->__ss.__rip;
+    uint64_t rip = set_rip;
     printf("emulating at: 0x%llx\n", rip);
+
+    uint8_t buf[32] = {0};
+    printf("dumping RIP\n");
+    check(uc_mem_read(uc, rip, buf, 8));
+    for (int i = 0; i < 8; i++) {
+        printf("%02x", buf[i]);
+    }
+    printf("\n");
+
+    printf("running\n");
     check(uc_emu_start(uc, rip, 0, 0, 0));
 
     uc_reg_read(uc, UC_X86_REG_RAX, &rip);
@@ -97,6 +109,7 @@ void fuzzl() {
     // save everything
     ucontext_t ucp;
     getcontext(&ucp);
+    printf("old rip: 0x%llx\n", ucp.uc_mcontext->__ss.__rip);
     // TODO: gotta pivot stack still
 #define set_reg(_enum, attr) check(uc_reg_write(uc, UC_X86_REG_##_enum, &ucp.uc_mcontext->__ss.__##attr));
     set_reg(RAX, rax);
@@ -132,7 +145,8 @@ void fuzzl() {
 
     ucp.uc_mcontext->__ss.__rip = (uint64_t)run;
     ucp.uc_mcontext->__ss.__rsp = stack_top;
-    swapcontext(&ucp_main, &ucp);
+    set_rip = (uint64_t)&&label;
+    setcontext(&ucp);
 
     /*
     register uint64_t rsp __asm__("rsp");
