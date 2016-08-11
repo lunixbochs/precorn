@@ -1,5 +1,5 @@
-#ifndef PRECORN_INJECT_H
-#define PRECORN_INJECT_H
+#ifndef PRECORN_H
+#define PRECORN_H
 
 #include <unicorn/unicorn.h>
 

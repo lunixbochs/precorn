@@ -1,3 +1,11 @@
+// This file works around the fact glibc malloc is not reentrant.
+// We use the same libc and entire address space on host and guest to simplify setup.
+// If QEMU (Unicorn) needs to allocate memory while emulating the guest malloc() function,
+// the memory manager lock will already be held, so it will deadlock.
+//
+// On glib before 2.46, it was possible to replace the entire allocator, so we use that to give Unicorn
+// an alternate memory allocator, removing the need to acquire the guest's allocator lock.
+
 #define _GNU_SOURCE
 
 #include <stdarg.h>
@@ -7,7 +15,7 @@
 #include <string.h>
 
 #include "glib_private.h"
-#include "inject.h"
+#include "precorn.h"
 #include "malloc.h"
 
 // we check is_host() so glib in the guest doesn't break. we only need to fix unicorn's allocator.
