@@ -24,31 +24,6 @@ static int syscall_abi[] = {UC_X86_REG_RAX, UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X
 
 precorn_context ctx = {0};
 
-static void pdis(void *data, uint64_t addr, uint32_t size) {
-    char buf[1025];
-
-    cs_insn *dis, *ins;
-    int count = cs_disasm(ctx.cs, data, size, addr, 0, &dis);
-    for (int i = 0; i < count; i++) {
-        ins = &dis[i];
-        // normal printf isn't reentrant
-        int len = snprintf(buf, 1024, "0x%08zx: %s %s\n", ins->address, ins->mnemonic, ins->op_str);
-        if (len > 0) write(1, buf, len);
-    }
-}
-
-static void hook_code(uc_engine *uc, uint64_t addr, uint32_t size, void *user) {
-    uint64_t rsp = 0;
-    uc_reg_read(uc, UC_X86_REG_RSP, &rsp);
-    uint8_t code[32];
-    if (size > 32) {
-        printf("0x%zx: code too large\n", addr);
-        return;
-    }
-    check(uc_mem_read(ctx.uc, addr, code, size));
-    pdis(code, addr, size);
-}
-
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user) {
     // assume null pointer deref
     if (addr < 0x4000) {
@@ -117,8 +92,6 @@ void set_tls() {
 }
 
 static void run() {
-    // TODO: this doesn't work if the guest is in printf, due to overlapping locks
-    // uc_hook_add(ctx.uc, &ctx.code_hook, UC_HOOK_CODE, hook_code, NULL, 1, 0);
     uc_hook_add(ctx.uc, &ctx.segfault_hook, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | UC_HOOK_MEM_FETCH_UNMAPPED, hook_mem_invalid, NULL, 1, 0);
     uc_hook_add(ctx.uc, &ctx.intr_hook, UC_HOOK_INTR, hook_intr, NULL, 1, 0);
     uc_hook_add(ctx.uc, &ctx.syscall_hook, UC_HOOK_INSN, hook_syscall, NULL, 1, 0, UC_X86_INS_SYSCALL);
@@ -149,7 +122,6 @@ void pivot() {
     glib_memhook();
 
     check(uc_open(UC_ARCH_X86, UC_MODE_64, &ctx.uc));
-    cs_open(CS_ARCH_X86, CS_MODE_64, &ctx.cs);
 
     // save everything
     getcontext(&ctx.ucp);

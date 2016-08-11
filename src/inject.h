@@ -1,7 +1,6 @@
 #ifndef PRECORN_INJECT_H
 #define PRECORN_INJECT_H
 
-#include <capstone/capstone.h>
 #include <unicorn/unicorn.h>
 
 #include <ucontext.h>
@@ -14,7 +13,6 @@ typedef struct {
 
     uint64_t stack_base, stack_size;
 
-    csh cs;
     uc_engine *uc;
     uc_hook code_hook,
             segfault_hook,
