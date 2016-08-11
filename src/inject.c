@@ -51,7 +51,7 @@ static void hook_code(uc_engine *uc, uint64_t addr, uint32_t size, void *user) {
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user) {
     // assume null pointer deref
     if (addr < 0x4000) {
-        printf("invalid access: 0x%llx\n", addr);
+        printf("invalid access: 0x%zx\n", addr);
         return false;
     }
     size = (size + 0xfff) & ~0xfff;
@@ -66,7 +66,7 @@ static void hook_syscall(uc_engine *uc, void *user) {
 
     uint64_t ret = 0;
     ret = syscall(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
-    printf("sys %d = %zd\n", (int)r[0], ret);
+    // printf("sys %d = %zd\n", (int)r[0], ret);
     if (ret == 0) {
         if (r[0] == SYS_arch_prctl) {
             if (r[1] == ARCH_SET_FS) {
@@ -129,7 +129,7 @@ static void run() {
     ctx.started = true;
     uint64_t ip = ctx.entry;
     while (1) {
-        printf("starting at 0x%zx\n", ip);
+        // printf("starting at 0x%zx\n", ip);
         check(uc_emu_start(ctx.uc, ip, 0, 0, 0));
         uc_reg_read(ctx.uc, UC_X86_REG_RIP, &ip);
         switch (ctx.exit_reason) {
@@ -168,7 +168,6 @@ void pivot() {
 #undef set_reg
         break;
     default:
-        printf("running normal program\n");
         return;
     }
 
