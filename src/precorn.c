@@ -27,6 +27,7 @@ static int syscall_abi[] = {UC_X86_REG_RAX, UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X
 
 precorn_context ctx = {0};
 
+// On guest memory fault, map the corresponding page from host memory into the guest.
 static bool hook_segfault(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user) {
     // assume null pointer deref
     if (addr < 0x4000) {
@@ -39,6 +40,10 @@ static bool hook_segfault(uc_engine *uc, uc_mem_type type, uint64_t addr, int si
     return true;
 }
 
+// This function is called to handle the SYSCALL instruction.
+// It currently:
+//  - watches mmap() to pre-map memory into the guest
+//  - watches arch_prctl() to update segment registers in the guest
 static void hook_syscall(uc_engine *uc, void *user) {
     check(uc_reg_read_batch(uc, syscall_abi, (void **)ctx.abi_reg_ptr, 7));
     uint64_t *r = &ctx.abi_reg[0];
