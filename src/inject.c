@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <asm/prctl.h>
+#include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
@@ -43,8 +44,9 @@ static void hook_syscall(uc_engine *uc, void *user) {
     uint64_t ret = 0;
     ret = syscall(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
     // printf("sys %d = %zd\n", (int)r[0], ret);
-    if (ret == 0) {
-        if (r[0] == SYS_arch_prctl) {
+    switch (r[0]) {
+    case SYS_arch_prctl:
+        if (ret == 0) {
             if (r[1] == ARCH_SET_FS) {
                 ctx.exit_reason = EXIT_SET_FS;
                 uc_emu_stop(uc);
@@ -53,6 +55,11 @@ static void hook_syscall(uc_engine *uc, void *user) {
                 uc_emu_stop(uc);
             }
         }
+    case SYS_mmap:
+        if (ret != (uint64_t)MAP_FAILED) {
+            uc_mem_map_ptr(uc, ret, r[2], UC_PROT_ALL, (void *)ret);
+        }
+        break;
     }
     uc_reg_write(uc, UC_X86_REG_RAX, &ret);
 }
