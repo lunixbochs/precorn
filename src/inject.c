@@ -17,7 +17,8 @@
 
 #define check(...) do {uc_err err; if ((err = __VA_ARGS__)) { printf("%s failed: %s\n", #__VA_ARGS__, uc_strerror(err)); }} while (0);
 
-int arch_prctl(int code, unsigned long *addr);
+extern int arch_prctl(int code, unsigned long *addr);
+extern void glib_memhook();
 
 static int syscall_abi[] = {UC_X86_REG_RAX, UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X86_REG_RDX, UC_X86_REG_R10, UC_X86_REG_R8, UC_X86_REG_R9};
 
@@ -142,8 +143,6 @@ static void run() {
     }
     exit(0);
 }
-
-extern void glib_memhook();
 
 __attribute__((constructor))
 void pivot() {
