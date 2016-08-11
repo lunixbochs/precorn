@@ -9,6 +9,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 link_directories(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 add_definitions(-ggdb -O2 -std=c99 -Wno-deprecated-declarations)
 
+# dlmalloc
+add_definitions(-DUSE_DL_PREFIX=1)
+
 file(GLOB_RECURSE FUZZ_SOURCES src/*.c)
 add_library(precorn SHARED ${FUZZ_SOURCES})
 target_link_libraries(precorn unicorn capstone)

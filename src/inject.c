@@ -10,10 +10,10 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
-#include <capstone/capstone.h>
-#include <unicorn/unicorn.h>
+#include "inject.h"
 
-#include <ucontext.h>
+#include <malloc.h>
+#include "malloc.h"
 
 #define check(...) do {uc_err err; if ((err = __VA_ARGS__)) { printf("%s failed: %s\n", #__VA_ARGS__, uc_strerror(err)); }} while (0);
 
@@ -21,32 +21,7 @@ int arch_prctl(int code, unsigned long *addr);
 
 static int syscall_abi[] = {UC_X86_REG_RAX, UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X86_REG_RDX, UC_X86_REG_R10, UC_X86_REG_R8, UC_X86_REG_R9};
 
-typedef struct {
-    ucontext_t ucp;
-    uint64_t entry;
-
-    uint64_t stack_base, stack_size;
-
-    csh cs;
-    uc_engine *uc;
-    uc_hook code_hook,
-            segfault_hook,
-            intr_hook,
-            syscall_hook;
-
-    uint64_t abi_reg[7];
-    uint64_t *abi_reg_ptr[7];
-
-    int exit_reason;
-} precorn_context;
-
-static precorn_context ctx = {0};
-
-enum {
-    EXIT_NONE,
-    EXIT_SET_FS,
-    EXIT_SET_GS,
-};
+precorn_context ctx = {0};
 
 static void pdis(void *data, uint64_t addr, uint32_t size) {
     char buf[1025];
@@ -74,7 +49,11 @@ static void hook_code(uc_engine *uc, uint64_t addr, uint32_t size, void *user) {
 }
 
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user) {
-    // printf("invalid mem: 0x%llx\n", addr);
+    // assume null pointer deref
+    if (addr < 0x4000) {
+        printf("invalid access: 0x%llx\n", addr);
+        return false;
+    }
     size = (size + 0xfff) & ~0xfff;
     addr &= ~0xfff;
     check(uc_mem_map_ptr(uc, addr, size, UC_PROT_ALL, (void *)addr));
@@ -147,6 +126,7 @@ static void run() {
         ctx.abi_reg_ptr[i] = &ctx.abi_reg[i];
     }
 
+    ctx.started = true;
     uint64_t ip = ctx.entry;
     while (1) {
         printf("starting at 0x%zx\n", ip);
@@ -163,8 +143,12 @@ static void run() {
     exit(0);
 }
 
+extern void glib_memhook();
+
 __attribute__((constructor))
 void pivot() {
+    glib_memhook();
+
     check(uc_open(UC_ARCH_X86, UC_MODE_64, &ctx.uc));
     cs_open(CS_ARCH_X86, CS_MODE_64, &ctx.cs);
 
