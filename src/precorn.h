@@ -1,6 +1,7 @@
 #ifndef PRECORN_H
 #define PRECORN_H
 
+#include <capstone/capstone.h>
 #include <unicorn/unicorn.h>
 
 #include <ucontext.h>
@@ -15,6 +16,7 @@ typedef struct {
 
     uint64_t stack_base, stack_size;
 
+    csh cs;
     uc_engine *uc;
     uc_hook code_hook,
             segfault_hook,
@@ -24,7 +26,7 @@ typedef struct {
     uint64_t abi_reg[7];
     uint64_t *abi_reg_ptr[7];
 
-    bool started;
+    bool pivoting, started;
     int exit_reason;
 } precorn_ctx;
 

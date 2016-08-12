@@ -8,6 +8,8 @@
 #include <malloc.h>
 #include "malloc.h"
 
+#include <capstone/capstone.h>
+
 precorn_ctx ctx = {0};
 
 // On guest memory fault, map the corresponding page from host memory into the guest.
@@ -23,13 +25,35 @@ static bool hook_segfault(uc_engine *uc, uc_mem_type type, uint64_t addr, int si
     return true;
 }
 
-static void hook_code(uc_engine *uc, uint64_t addr, uint32_t size, void *user) {
+static void pdis(void *data, uint64_t addr, uint32_t size) {
     char buf[1025];
-    int len = snprintf(buf, 1024, "code at 0x%zx\n", addr);
-    if (len > 0) write(1, buf, len);
+
+    cs_insn *dis, *ins;
+    int count = cs_disasm(ctx.cs, data, size, addr, 0, &dis);
+    for (int i = 0; i < count; i++) {
+        ins = &dis[i];
+        // normal printf isn't reentrant
+        int len = snprintf(buf, 1024, "0x%08zx: %s %s\n", ins->address, ins->mnemonic, ins->op_str);
+        if (len > 0) write(1, buf, len);
+    }
+}
+
+static void hook_code(uc_engine *uc, uint64_t addr, uint32_t size, void *user) {
+    uint64_t rsp = 0;
+    uc_reg_read(uc, UC_X86_REG_RSP, &rsp);
+    uint8_t code[32];
+    if (size > 32) {
+        printf("0x%zx: code too large: %d\n", addr, size);
+        return;
+    }
+    uc_check(uc_mem_read(ctx.uc, addr, code, size));
+    pdis(code, addr, size);
 }
 
 static void run() {
+    cs_open(CS_ARCH_X86, CS_MODE_64, &ctx.cs);
+    uc_hook_add(ctx.uc, &ctx.code_hook, UC_HOOK_CODE, hook_code, NULL, 1, 0);
+
     // hook guest segfaults to identity map the surrounding page into the guest
     uc_hook_add(ctx.uc, &ctx.segfault_hook, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | UC_HOOK_MEM_FETCH_UNMAPPED, hook_segfault, NULL, 1, 0);
 
@@ -54,13 +78,14 @@ static void run() {
     exit(0);
 }
 
-extern void glib_memhook();
+extern void alloc_init();
 
 __attribute__((constructor))
 void pivot() {
-    // hook glib allocator to fix glibc reentrancy problems in Unicorn
-    // see glib_hooks.c for more information
-    glib_memhook();
+    ctx.pivoting = true;
+    // we hook glibc allocator to fix reentrancy problems in Unicorn
+    // see alloc_hook.c for more information
+    alloc_init();
 
     // create the emulator
     host_uc_init(&ctx);

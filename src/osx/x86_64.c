@@ -40,7 +40,11 @@ static void hook_syscall(uc_engine *uc, void *user) {
 void host_uc_init(precorn_ctx *ctx) {
     uc_check(uc_open(UC_ARCH_X86, UC_MODE_64, &ctx->uc));
     uc_hook_add(ctx->uc, &ctx->syscall_hook, UC_HOOK_INSN, hook_syscall, NULL, 1, 0, UC_X86_INS_SYSCALL);
-    set_tls(ctx);
+
+    uint64_t *pthread_self, gs;
+    __asm__ volatile ("mov %%gs:0, %0" : "=r"(pthread_self));
+    gs = (uint64_t)&pthread_self[28];
+    uc_check(wrmsr(ctx->uc, 0xC0000101, gs));
 }
 
 // called after uc_emu_start() exits
