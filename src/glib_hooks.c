@@ -6,8 +6,6 @@
 // On glib before 2.46, it was possible to replace the entire allocator, so we use that to give Unicorn
 // an alternate memory allocator, removing the need to acquire the guest's allocator lock.
 
-#define _GNU_SOURCE
-
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>

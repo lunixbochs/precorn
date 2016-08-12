@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define uc_check(...) do {uc_err err; if ((err = __VA_ARGS__)) { printf("%s failed: %s\n", #__VA_ARGS__, uc_strerror(err)); exit(1); }} while (0);
+
 typedef struct {
     ucontext_t ucp;
     uint64_t entry;
@@ -24,7 +26,7 @@ typedef struct {
 
     bool started;
     int exit_reason;
-} precorn_context;
+} precorn_ctx;
 
 enum {
     EXIT_NONE,
@@ -32,6 +34,9 @@ enum {
     EXIT_SET_GS,
 };
 
-extern precorn_context ctx;
+extern precorn_ctx ctx;
+extern void host_uc_init(precorn_ctx *ctx);
+extern bool host_trampoline(precorn_ctx *ctx);
+extern void host_setup(precorn_ctx *ctx, uint64_t run, uint64_t stack_top);
 
 #endif
